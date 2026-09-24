@@ -1,6 +1,7 @@
 const { IncidentStatus, UserRole } = require("@prisma/client");
 const prisma = require("../lib/prisma");
 const AppError = require("../utils/app-error");
+const { reverseGeocode } = require("../utils/reverse-geocode");
 
 const incidentInclude = {
   reportedBy: {
@@ -12,6 +13,14 @@ const incidentInclude = {
   locationLogs: {
     orderBy: { createdAt: "desc" },
     take: 1,
+  },
+};
+
+const incidentListInclude = {
+  ...incidentInclude,
+  locationLogs: {
+    orderBy: { createdAt: "desc" },
+    take: 100,
   },
 };
 
@@ -27,14 +36,51 @@ const assertValidCoordinates = (latitude, longitude) => {
   }
 };
 
-const createSosIncident = async ({ userId, role, title, description, latitude, longitude, address }) => {
+const parseLocationAccuracy = (accuracy) => {
+  if (accuracy === undefined || accuracy === null || accuracy === "") {
+    return null;
+  }
+
+  const parsed = Number(accuracy);
+  if (!Number.isFinite(parsed) || parsed < 0) {
+    throw new AppError(400, "accuracy must be a valid number greater than or equal to 0.");
+  }
+  return parsed;
+};
+
+const parseLocationTimestamp = (locationTimestamp) => {
+  if (!locationTimestamp) {
+    return new Date();
+  }
+
+  const parsed = new Date(locationTimestamp);
+  if (Number.isNaN(parsed.getTime())) {
+    throw new AppError(400, "locationTimestamp must be a valid ISO datetime.");
+  }
+  return parsed;
+};
+
+const createSosIncident = async ({
+  userId,
+  role,
+  title,
+  description,
+  latitude,
+  longitude,
+  accuracy,
+  locationTimestamp,
+  address,
+}) => {
   if (role !== UserRole.END_USER) {
     throw new AppError(403, "Only END_USER can trigger SOS incidents.");
   }
 
   const parsedLatitude = Number(latitude);
   const parsedLongitude = Number(longitude);
+  const parsedAccuracy = parseLocationAccuracy(accuracy);
+  const parsedLocationTimestamp = parseLocationTimestamp(locationTimestamp);
   assertValidCoordinates(parsedLatitude, parsedLongitude);
+  const resolvedAddress = address?.trim() || (await reverseGeocode({ latitude: parsedLatitude, longitude: parsedLongitude }));
 
   const incident = await prisma.incident.create({
     data: {
@@ -45,7 +91,9 @@ const createSosIncident = async ({ userId, role, title, description, latitude, l
         create: {
           latitude: parsedLatitude,
           longitude: parsedLongitude,
-          address: address?.trim() || null,
+          accuracy: parsedAccuracy,
+          locationTimestamp: parsedLocationTimestamp,
+          address: resolvedAddress || null,
           source: "SOS_TRIGGER",
           createdById: userId,
         },
@@ -98,7 +146,16 @@ const getAccessibleIncident = async ({ incidentId, userId, role }) => {
   throw new AppError(403, "You do not have access to this incident.");
 };
 
-const addIncidentLocation = async ({ incidentId, userId, role, latitude, longitude, address }) => {
+const addIncidentLocation = async ({
+  incidentId,
+  userId,
+  role,
+  latitude,
+  longitude,
+  accuracy,
+  locationTimestamp,
+  address,
+}) => {
   const incident = await prisma.incident.findUnique({
     where: { id: incidentId },
     select: { id: true, reportedById: true, status: true },
@@ -121,14 +178,39 @@ const addIncidentLocation = async ({ incidentId, userId, role, latitude, longitu
 
   const parsedLatitude = Number(latitude);
   const parsedLongitude = Number(longitude);
+  const parsedAccuracy = parseLocationAccuracy(accuracy);
+  const parsedLocationTimestamp = parseLocationTimestamp(locationTimestamp);
   assertValidCoordinates(parsedLatitude, parsedLongitude);
+  const resolvedAddress = address?.trim() || (await reverseGeocode({ latitude: parsedLatitude, longitude: parsedLongitude }));
+
+  const lastLocation = await prisma.incidentLocation.findFirst({
+    where: { incidentId: incident.id },
+    orderBy: { createdAt: "desc" },
+    select: { latitude: true, longitude: true, accuracy: true, locationTimestamp: true },
+  });
+
+  const isDuplicateUpdate =
+    lastLocation &&
+    Math.abs(lastLocation.latitude - parsedLatitude) < 0.000001 &&
+    Math.abs(lastLocation.longitude - parsedLongitude) < 0.000001 &&
+    (lastLocation.accuracy ?? null) === parsedAccuracy &&
+    new Date(lastLocation.locationTimestamp).getTime() === parsedLocationTimestamp.getTime();
+
+  if (isDuplicateUpdate) {
+    return prisma.incident.findUnique({
+      where: { id: incident.id },
+      include: incidentInclude,
+    });
+  }
 
   await prisma.incidentLocation.create({
     data: {
       incidentId: incident.id,
       latitude: parsedLatitude,
       longitude: parsedLongitude,
-      address: address?.trim() || null,
+      accuracy: parsedAccuracy,
+      locationTimestamp: parsedLocationTimestamp,
+      address: resolvedAddress || null,
       source: isAdmin ? "ADMIN_UPDATE" : "USER_UPDATE",
       createdById: userId,
     },
@@ -184,7 +266,7 @@ const updateIncidentStatus = async ({ incidentId, userId, role, status }) => {
 const listIncidentsByRole = async ({ userId, role }) => {
   if (role === UserRole.ADMIN) {
     return prisma.incident.findMany({
-      include: incidentInclude,
+      include: incidentListInclude,
       orderBy: { createdAt: "desc" },
       take: 200,
     });
@@ -193,7 +275,7 @@ const listIncidentsByRole = async ({ userId, role }) => {
   if (role === UserRole.END_USER) {
     return prisma.incident.findMany({
       where: { reportedById: userId },
-      include: incidentInclude,
+      include: incidentListInclude,
       orderBy: { createdAt: "desc" },
       take: 200,
     });
@@ -212,7 +294,7 @@ const listIncidentsByRole = async ({ userId, role }) => {
 
     return prisma.incident.findMany({
       where: { reportedById: { in: endUserIds } },
-      include: incidentInclude,
+      include: incidentListInclude,
       orderBy: { createdAt: "desc" },
       take: 200,
     });

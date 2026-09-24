@@ -73,6 +73,8 @@ model IncidentLocation {
   incidentId  Int
   latitude    Float
   longitude   Float
+  accuracy    Float?
+  locationTimestamp DateTime @default(now())
   address     String?
   source      String   @default("USER_UPDATE")
   createdById Int

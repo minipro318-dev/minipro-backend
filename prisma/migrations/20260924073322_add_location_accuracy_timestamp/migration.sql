@@ -1,0 +1,3 @@
+-- AlterTable
+ALTER TABLE "IncidentLocation" ADD COLUMN     "accuracy" DOUBLE PRECISION,
+ADD COLUMN     "locationTimestamp" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;

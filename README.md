@@ -6,6 +6,8 @@ This backend currently implements two BRD milestones:
 - PostgreSQL-backed server session storage
 - SOS incident creation and status workflow
 - Incident location logging and role-based incident visibility
+- Automatic reverse-geocoded address fallback
+- Real-time SOS/location/status events over Socket.IO
 - MVC project structure with Prisma ORM
 
 ## Tech Stack
@@ -119,6 +121,8 @@ Payload:
   "description": "Need immediate help",
   "latitude": 12.9716,
   "longitude": 77.5946,
+  "accuracy": 9.5,
+  "locationTimestamp": "2026-09-24T07:35:00.000Z",
   "address": "MG Road, Bengaluru"
 }
 ```
@@ -140,6 +144,8 @@ Payload:
 {
   "latitude": 12.9720,
   "longitude": 77.5950,
+  "accuracy": 8.2,
+  "locationTimestamp": "2026-09-24T07:38:00.000Z",
   "address": "Near Trinity Circle"
 }
 ```
@@ -150,3 +156,14 @@ Payload:
 ### PATCH `/:id/cancel`
 - `END_USER` (owner) can cancel own active incidents.
 - `ADMIN` can cancel active incidents.
+
+## Real-time Events (Socket.IO)
+Authenticated sockets receive role-authorized events:
+- `incident:created`
+- `incident:location-updated`
+- `incident:status-updated`
+
+Backend emits only to:
+- reporting user
+- linked guardians of that user
+- admins

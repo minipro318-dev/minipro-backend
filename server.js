@@ -6,6 +6,7 @@ const session = require("express-session");
 const connectPgSimple = require("connect-pg-simple");
 const pool = require("./config/db");
 const prisma = require("./lib/prisma");
+const { setupSocket } = require("./lib/socket");
 const authRoutes = require("./routes/auth.routes");
 const incidentRoutes = require("./routes/incident.routes");
 const { notFound, errorHandler } = require("./middleware/error");
@@ -69,6 +70,7 @@ const port = process.env.PORT || 3000;
 const server = app.listen(port, () => {
   console.log(`Server running on port ${port}`);
 });
+setupSocket(server);
 
 const shutdown = async () => {
   server.close(async () => {

@@ -1,5 +1,6 @@
 const { IncidentStatus } = require("@prisma/client");
 const incidentService = require("../services/incident.service");
+const { emitToAuthorizedRecipients } = require("../lib/socket");
 
 const triggerSos = async (req, res) => {
   const incident = await incidentService.createSosIncident({
@@ -9,7 +10,25 @@ const triggerSos = async (req, res) => {
     description: req.body.description,
     latitude: req.body.latitude,
     longitude: req.body.longitude,
+    accuracy: req.body.accuracy,
+    locationTimestamp: req.body.locationTimestamp,
     address: req.body.address,
+  });
+
+  await emitToAuthorizedRecipients({
+    incident,
+    eventName: "incident:created",
+    payload: {
+      incidentId: incident.id,
+      userId: incident.reportedById,
+      latitude: incident.locationLogs[0]?.latitude ?? null,
+      longitude: incident.locationLogs[0]?.longitude ?? null,
+      accuracy: incident.locationLogs[0]?.accuracy ?? null,
+      locationTimestamp: incident.locationLogs[0]?.locationTimestamp ?? null,
+      createdAt: incident.createdAt,
+      status: incident.status,
+      incident,
+    },
   });
 
   return res.status(201).json({
@@ -44,7 +63,25 @@ const addLocation = async (req, res) => {
     role: req.auth.role,
     latitude: req.body.latitude,
     longitude: req.body.longitude,
+    accuracy: req.body.accuracy,
+    locationTimestamp: req.body.locationTimestamp,
     address: req.body.address,
+  });
+
+  await emitToAuthorizedRecipients({
+    incident,
+    eventName: "incident:location-updated",
+    payload: {
+      incidentId: incident.id,
+      userId: incident.reportedById,
+      latitude: incident.locationLogs[0]?.latitude ?? null,
+      longitude: incident.locationLogs[0]?.longitude ?? null,
+      accuracy: incident.locationLogs[0]?.accuracy ?? null,
+      locationTimestamp: incident.locationLogs[0]?.locationTimestamp ?? null,
+      createdAt: incident.createdAt,
+      status: incident.status,
+      incident,
+    },
   });
 
   return res.status(200).json({
@@ -61,6 +98,19 @@ const resolveIncident = async (req, res) => {
     status: IncidentStatus.RESOLVED,
   });
 
+  await emitToAuthorizedRecipients({
+    incident,
+    eventName: "incident:status-updated",
+    payload: {
+      incidentId: incident.id,
+      userId: incident.reportedById,
+      status: incident.status,
+      resolvedAt: incident.resolvedAt,
+      createdAt: incident.createdAt,
+      incident,
+    },
+  });
+
   return res.status(200).json({
     message: "Incident marked as resolved.",
     incident,
@@ -73,6 +123,19 @@ const cancelIncident = async (req, res) => {
     userId: Number(req.auth.sub),
     role: req.auth.role,
     status: IncidentStatus.CANCELLED,
+  });
+
+  await emitToAuthorizedRecipients({
+    incident,
+    eventName: "incident:status-updated",
+    payload: {
+      incidentId: incident.id,
+      userId: incident.reportedById,
+      status: incident.status,
+      resolvedAt: incident.resolvedAt,
+      createdAt: incident.createdAt,
+      incident,
+    },
   });
 
   return res.status(200).json({
