@@ -167,3 +167,50 @@ Backend emits only to:
 - reporting user
 - linked guardians of that user
 - admins
+
+## Guardian Invite API
+Base path: `/api/guardian-invites`
+
+### POST `/` (END_USER)
+Create a pending guardian invite and send invite email to guardian.
+
+Payload:
+```json
+{
+  "guardianName": "Anita Rao",
+  "guardianEmail": "anita@example.com",
+  "guardianMobile": "9876543210"
+}
+```
+
+### GET `/` (END_USER)
+List guardian invites created by authenticated end user.
+
+### POST `/accept` (Public)
+Accept invite, create guardian account, and auto-link guardian with inviting end user.
+
+Payload:
+```json
+{
+  "inviteCode": "A1B2C3D4",
+  "guardianName": "Anita Rao",
+  "guardianEmail": "anita@example.com",
+  "guardianMobile": "9876543210",
+  "password": "StrongPass1",
+  "confirmPassword": "StrongPass1"
+}
+```
+
+## SMTP Setup (required for guardian invite emails)
+Configure these in `.env`:
+
+```env
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USER=your_email@gmail.com
+SMTP_PASS=your_gmail_app_password
+SMTP_FROM_EMAIL=Women Safety Platform <your_email@gmail.com>
+FRONTEND_APP_URL=http://localhost:5173
+```
+
+For Gmail, use an App Password (not your normal account password).
