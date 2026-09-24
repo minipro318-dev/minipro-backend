@@ -1,0 +1,97 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id                Int            @id @default(autoincrement())
+  name              String
+  email             String         @unique
+  mobile            String?        @unique
+  passwordHash      String
+  role              UserRole
+  status            Boolean        @default(true)
+  lastLogin         DateTime?
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+  guardianLinks     GuardianLink[] @relation("EndUserLinks")
+  monitoringLinks   GuardianLink[] @relation("GuardianLinks")
+  reportedIncidents Incident[]     @relation("ReportedIncidents")
+  resolvedIncidents Incident[]     @relation("ResolvedIncidents")
+  locationLogs      IncidentLocation[]
+
+  @@index([role])
+}
+
+model GuardianLink {
+  id         Int      @id @default(autoincrement())
+  guardianId Int
+  endUserId  Int
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  guardian   User     @relation("GuardianLinks", fields: [guardianId], references: [id], onDelete: Cascade)
+  endUser    User     @relation("EndUserLinks", fields: [endUserId], references: [id], onDelete: Cascade)
+
+  @@unique([guardianId, endUserId])
+  @@index([guardianId])
+  @@index([endUserId])
+}
+
+model Session {
+  sid    String   @id @db.VarChar(255)
+  sess   Json
+  expire DateTime
+
+  @@index([expire])
+  @@map("session")
+}
+
+model Incident {
+  id            Int                @id @default(autoincrement())
+  title         String             @default("Emergency SOS")
+  description   String?
+  status        IncidentStatus     @default(ACTIVE)
+  reportedById  Int
+  resolvedById  Int?
+  resolvedAt    DateTime?
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+  reportedBy    User               @relation("ReportedIncidents", fields: [reportedById], references: [id], onDelete: Cascade)
+  resolvedBy    User?              @relation("ResolvedIncidents", fields: [resolvedById], references: [id], onDelete: SetNull)
+  locationLogs  IncidentLocation[]
+
+  @@index([status])
+  @@index([reportedById])
+  @@index([createdAt])
+}
+
+model IncidentLocation {
+  id          Int      @id @default(autoincrement())
+  incidentId  Int
+  latitude    Float
+  longitude   Float
+  address     String?
+  source      String   @default("USER_UPDATE")
+  createdById Int
+  createdAt   DateTime @default(now())
+  incident    Incident @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+  createdBy   User     @relation(fields: [createdById], references: [id], onDelete: Cascade)
+
+  @@index([incidentId, createdAt])
+  @@index([createdById])
+}
+
+enum UserRole {
+  ADMIN
+  GUARDIAN
+  END_USER
+}
+
+enum IncidentStatus {
+  ACTIVE
+  RESOLVED
+  CANCELLED
+}
