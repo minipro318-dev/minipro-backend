@@ -19,5 +19,20 @@ router.get(
   authorizeRoles("END_USER"),
   asyncHandler(guardianInviteController.listInvites),
 );
+router.get(
+  "/linked",
+  authorizeRoles("END_USER"),
+  asyncHandler(guardianInviteController.listLinkedGuardians),
+);
+router.patch(
+  "/linked/:guardianId",
+  authorizeRoles("END_USER"),
+  asyncHandler(guardianInviteController.updateLinkedGuardian),
+);
+router.delete(
+  "/linked/:guardianId",
+  authorizeRoles("END_USER"),
+  asyncHandler(guardianInviteController.removeLinkedGuardian),
+);
 
 module.exports = router;

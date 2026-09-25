@@ -33,6 +33,16 @@ const sanitizeUser = (user) => ({
   lastLogin: user.lastLogin,
 });
 
+const sanitizeLinkedGuardian = (guardian) => ({
+  id: guardian.id,
+  name: guardian.name,
+  email: guardian.email,
+  mobile: guardian.mobile,
+  role: guardian.role,
+  status: guardian.status,
+  linkedAt: guardian.linkedAt,
+});
+
 const issueToken = (user) =>
   jwt.sign(
     {
@@ -161,6 +171,161 @@ const listInvites = async ({ invitedById, role }) => {
   return invites.map(sanitizeInvite);
 };
 
+const listLinkedGuardians = async ({ endUserId, role }) => {
+  if (role !== UserRole.END_USER) {
+    throw new AppError(403, "Only END_USER can view linked guardians.");
+  }
+
+  const links = await prisma.guardianLink.findMany({
+    where: { endUserId },
+    include: {
+      guardian: {
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          mobile: true,
+          role: true,
+          status: true,
+        },
+      },
+    },
+    orderBy: { createdAt: "desc" },
+  });
+
+  return links.map((link) =>
+    sanitizeLinkedGuardian({
+      ...link.guardian,
+      linkedAt: link.createdAt,
+    }),
+  );
+};
+
+const updateLinkedGuardian = async ({
+  endUserId,
+  role,
+  guardianId,
+  guardianName,
+  guardianEmail,
+  guardianMobile,
+}) => {
+  if (role !== UserRole.END_USER) {
+    throw new AppError(403, "Only END_USER can edit linked guardians.");
+  }
+
+  if (!Number.isInteger(guardianId) || guardianId <= 0) {
+    throw new AppError(400, "guardianId must be a valid positive number.");
+  }
+
+  const normalizedName = guardianName?.trim();
+  const normalizedEmail = guardianEmail?.trim().toLowerCase();
+  const normalizedMobile = guardianMobile?.trim();
+
+  if (!normalizedName && !normalizedEmail && !normalizedMobile) {
+    throw new AppError(400, "Provide at least one field: guardianName, guardianEmail, or guardianMobile.");
+  }
+
+  if (normalizedEmail && !isEmail(normalizedEmail)) {
+    throw new AppError(400, "Please provide a valid guardian email address.");
+  }
+
+  const link = await prisma.guardianLink.findFirst({
+    where: {
+      endUserId,
+      guardianId,
+    },
+    include: {
+      guardian: {
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          mobile: true,
+          role: true,
+          status: true,
+        },
+      },
+    },
+  });
+
+  if (!link) {
+    throw new AppError(404, "Linked guardian not found.");
+  }
+
+  const data = {};
+  if (normalizedName) data.name = normalizedName;
+  if (normalizedEmail) data.email = normalizedEmail;
+  if (normalizedMobile) data.mobile = normalizedMobile;
+
+  if (Object.prototype.hasOwnProperty.call(data, "email")) {
+    const emailOwner = await prisma.user.findFirst({
+      where: { email: data.email },
+      select: { id: true },
+    });
+    if (emailOwner && emailOwner.id !== guardianId) {
+      throw new AppError(409, "Another account already uses this guardian email.");
+    }
+  }
+
+  if (Object.prototype.hasOwnProperty.call(data, "mobile")) {
+    const mobileOwner = await prisma.user.findFirst({
+      where: { mobile: data.mobile },
+      select: { id: true },
+    });
+    if (mobileOwner && mobileOwner.id !== guardianId) {
+      throw new AppError(409, "Another account already uses this guardian mobile.");
+    }
+  }
+
+  const guardian = await prisma.user.update({
+    where: { id: guardianId },
+    data,
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      mobile: true,
+      role: true,
+      status: true,
+    },
+  });
+
+  return sanitizeLinkedGuardian({ ...guardian, linkedAt: link.createdAt });
+};
+
+const removeLinkedGuardian = async ({ endUserId, role, guardianId }) => {
+  if (role !== UserRole.END_USER) {
+    throw new AppError(403, "Only END_USER can remove linked guardians.");
+  }
+
+  if (!Number.isInteger(guardianId) || guardianId <= 0) {
+    throw new AppError(400, "guardianId must be a valid positive number.");
+  }
+
+  const link = await prisma.guardianLink.findUnique({
+    where: {
+      guardianId_endUserId: {
+        guardianId,
+        endUserId,
+      },
+    },
+    select: { id: true },
+  });
+
+  if (!link) {
+    throw new AppError(404, "Linked guardian not found.");
+  }
+
+  await prisma.guardianLink.delete({
+    where: {
+      guardianId_endUserId: {
+        guardianId,
+        endUserId,
+      },
+    },
+  });
+};
+
 const acceptInvite = async ({ inviteCode, guardianName, guardianEmail, guardianMobile, password, confirmPassword }) => {
   const normalizedCode = inviteCode?.trim().toUpperCase();
   if (!normalizedCode || !guardianName || !guardianEmail || !guardianMobile || !password || !confirmPassword) {
@@ -269,4 +434,11 @@ const acceptInvite = async ({ inviteCode, guardianName, guardianEmail, guardianM
   };
 };
 
-module.exports = { createInvite, listInvites, acceptInvite };
+module.exports = {
+  createInvite,
+  listInvites,
+  listLinkedGuardians,
+  updateLinkedGuardian,
+  removeLinkedGuardian,
+  acceptInvite,
+};

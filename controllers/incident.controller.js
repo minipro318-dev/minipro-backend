@@ -96,6 +96,7 @@ const resolveIncident = async (req, res) => {
     userId: Number(req.auth.sub),
     role: req.auth.role,
     status: IncidentStatus.RESOLVED,
+    resolutionNote: req.body?.resolutionNote,
   });
 
   await emitToAuthorizedRecipients({
@@ -106,6 +107,8 @@ const resolveIncident = async (req, res) => {
       userId: incident.reportedById,
       status: incident.status,
       resolvedAt: incident.resolvedAt,
+      resolvedByRole: incident.resolvedByRole,
+      resolutionNote: incident.resolutionNote,
       createdAt: incident.createdAt,
       incident,
     },
@@ -133,6 +136,8 @@ const cancelIncident = async (req, res) => {
       userId: incident.reportedById,
       status: incident.status,
       resolvedAt: incident.resolvedAt,
+      resolvedByRole: incident.resolvedByRole,
+      resolutionNote: incident.resolutionNote,
       createdAt: incident.createdAt,
       incident,
     },

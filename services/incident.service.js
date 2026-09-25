@@ -1,4 +1,4 @@
-const { IncidentStatus, UserRole } = require("@prisma/client");
+const { IncidentStatus, IncidentResolvedBy, UserRole } = require("@prisma/client");
 const prisma = require("../lib/prisma");
 const AppError = require("../utils/app-error");
 const { reverseGeocode } = require("../utils/reverse-geocode");
@@ -60,6 +60,32 @@ const parseLocationTimestamp = (locationTimestamp) => {
   return parsed;
 };
 
+const parseResolutionNote = (resolutionNote) => {
+  if (resolutionNote === undefined || resolutionNote === null) return null;
+  if (typeof resolutionNote !== "string") {
+    throw new AppError(400, "resolutionNote must be a string.");
+  }
+  const trimmed = resolutionNote.trim();
+  if (!trimmed) return null;
+  if (trimmed.length > 300) {
+    throw new AppError(400, "resolutionNote must be at most 300 characters.");
+  }
+  return trimmed;
+};
+
+const RESOLVED_BY_ROLE = IncidentResolvedBy || {
+  USER: "USER",
+  GUARDIAN: "GUARDIAN",
+  ADMIN: "ADMIN",
+};
+
+const resolvedByRoleForActor = (role) => {
+  if (role === UserRole.ADMIN) return RESOLVED_BY_ROLE.ADMIN;
+  if (role === UserRole.GUARDIAN) return RESOLVED_BY_ROLE.GUARDIAN;
+  if (role === UserRole.END_USER) return RESOLVED_BY_ROLE.USER;
+  return null;
+};
+
 const createSosIncident = async ({
   userId,
   role,
@@ -81,6 +107,14 @@ const createSosIncident = async ({
   const parsedLocationTimestamp = parseLocationTimestamp(locationTimestamp);
   assertValidCoordinates(parsedLatitude, parsedLongitude);
   const resolvedAddress = address?.trim() || (await reverseGeocode({ latitude: parsedLatitude, longitude: parsedLongitude }));
+
+  const existingActive = await prisma.incident.findFirst({
+    where: { reportedById: userId, status: IncidentStatus.ACTIVE },
+    select: { id: true },
+  });
+  if (existingActive) {
+    throw new AppError(409, `An active SOS incident already exists (#${existingActive.id}). Resolve it before creating a new SOS.`);
+  }
 
   const incident = await prisma.incident.create({
     data: {
@@ -224,7 +258,7 @@ const addIncidentLocation = async ({
   return updated;
 };
 
-const updateIncidentStatus = async ({ incidentId, userId, role, status }) => {
+const updateIncidentStatus = async ({ incidentId, userId, role, status, resolutionNote }) => {
   if (![IncidentStatus.RESOLVED, IncidentStatus.CANCELLED].includes(status)) {
     throw new AppError(400, "status must be RESOLVED or CANCELLED.");
   }
@@ -244,18 +278,36 @@ const updateIncidentStatus = async ({ incidentId, userId, role, status }) => {
 
   const isAdmin = role === UserRole.ADMIN;
   const isOwner = role === UserRole.END_USER && incident.reportedById === userId;
-  const ownerCanCancelOnly = status === IncidentStatus.CANCELLED;
+  const isGuardian = role === UserRole.GUARDIAN;
 
-  if (!isAdmin && !(isOwner && ownerCanCancelOnly)) {
-    throw new AppError(403, "You do not have permission to update this incident status.");
+  const canResolveAsGuardian =
+    isGuardian &&
+    (await prisma.guardianLink.findFirst({
+      where: { guardianId: userId, endUserId: incident.reportedById },
+      select: { id: true },
+    }));
+
+  if (status === IncidentStatus.RESOLVED) {
+    if (!isAdmin && !isOwner && !canResolveAsGuardian) {
+      throw new AppError(403, "You do not have permission to resolve this incident.");
+    }
+  } else if (status === IncidentStatus.CANCELLED) {
+    if (!isAdmin && !isOwner) {
+      throw new AppError(403, "You do not have permission to cancel this incident.");
+    }
   }
+
+  const parsedResolutionNote = parseResolutionNote(resolutionNote);
+  const actorResolvedByRole = status === IncidentStatus.RESOLVED ? resolvedByRoleForActor(role) : null;
 
   const updated = await prisma.incident.update({
     where: { id: incident.id },
     data: {
       status,
-      resolvedById: isAdmin ? userId : null,
+      resolvedById: status === IncidentStatus.RESOLVED ? userId : null,
+      resolvedByRole: actorResolvedByRole,
       resolvedAt: new Date(),
+      resolutionNote: status === IncidentStatus.RESOLVED ? parsedResolutionNote : null,
     },
     include: incidentInclude,
   });

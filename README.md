@@ -153,7 +153,21 @@ Payload:
 ```
 
 ### PATCH `/:id/resolve`
-- `ADMIN` can resolve active incidents.
+- `ADMIN`, linked `GUARDIAN`, or owning `END_USER` can resolve active incidents.
+
+Optional payload:
+```json
+{
+  "resolutionNote": "User confirmed safe and emergency is over."
+}
+```
+
+When resolved, backend stores:
+- `status = RESOLVED`
+- `resolvedAt`
+- `resolvedById`
+- `resolvedByRole` (`USER | GUARDIAN | ADMIN`)
+- optional `resolutionNote`
 
 ### PATCH `/:id/cancel`
 - `END_USER` (owner) can cancel own active incidents.
@@ -187,6 +201,24 @@ Payload:
 
 ### GET `/` (END_USER)
 List guardian invites created by authenticated end user.
+
+### GET `/linked` (END_USER)
+List guardians currently linked to authenticated end user.
+
+### PATCH `/linked/:guardianId` (END_USER)
+Edit linked guardian details (any one or more fields):
+
+Payload:
+```json
+{
+  "guardianName": "Anita Rao",
+  "guardianEmail": "anita@example.com",
+  "guardianMobile": "9876543210"
+}
+```
+
+### DELETE `/linked/:guardianId` (END_USER)
+Remove/unlink a guardian from the authenticated end user.
 
 ### POST `/accept` (Public)
 Accept invite, create guardian account, and auto-link guardian with inviting end user.

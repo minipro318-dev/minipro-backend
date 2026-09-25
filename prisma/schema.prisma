@@ -58,7 +58,9 @@ model Incident {
   status        IncidentStatus     @default(ACTIVE)
   reportedById  Int
   resolvedById  Int?
+  resolvedByRole IncidentResolvedBy?
   resolvedAt    DateTime?
+  resolutionNote String?
   createdAt     DateTime           @default(now())
   updatedAt     DateTime           @updatedAt
   reportedBy    User               @relation("ReportedIncidents", fields: [reportedById], references: [id], onDelete: Cascade)
@@ -119,6 +121,12 @@ enum IncidentStatus {
   ACTIVE
   RESOLVED
   CANCELLED
+}
+
+enum IncidentResolvedBy {
+  USER
+  GUARDIAN
+  ADMIN
 }
 
 enum GuardianInviteStatus {
