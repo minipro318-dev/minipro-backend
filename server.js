@@ -10,6 +10,7 @@ const { setupSocket } = require("./lib/socket");
 const authRoutes = require("./routes/auth.routes");
 const incidentRoutes = require("./routes/incident.routes");
 const guardianInviteRoutes = require("./routes/guardian-invite.routes");
+const nearbyHelpRoutes = require("./routes/nearby-help.routes");
 const { notFound, errorHandler } = require("./middleware/error");
 
 dotenv.config();
@@ -64,6 +65,7 @@ app.get("/", async (req, res, next) => {
 app.use("/api/auth", authRoutes);
 app.use("/api/incidents", incidentRoutes);
 app.use("/api/guardian-invites", guardianInviteRoutes);
+app.use("/api/nearby-help", nearbyHelpRoutes);
 
 app.use(notFound);
 app.use(errorHandler);

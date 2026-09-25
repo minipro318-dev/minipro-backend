@@ -8,6 +8,7 @@ This backend currently implements two BRD milestones:
 - Incident location logging and role-based incident visibility
 - Automatic reverse-geocoded address fallback
 - Real-time SOS/location/status events over Socket.IO
+- Nearby Help lookup for END_USER (OpenStreetMap/Overpass + OSRM walking routes)
 - MVC project structure with Prisma ORM
 
 ## Tech Stack
@@ -41,6 +42,7 @@ utils/
   app-error.js
   async-handler.js
   validators.js
+  reverse-geocode.js
 server.js
 ```
 
@@ -214,3 +216,31 @@ FRONTEND_APP_URL=http://localhost:5173
 ```
 
 For Gmail, use an App Password (not your normal account password).
+
+## Nearby Help API (END_USER only)
+Base path: `/api/nearby-help`
+
+### GET `/?latitude=..&longitude=..`
+Returns nearby police stations and hospitals (top 2-3) with:
+- name
+- address
+- distance
+- estimated walking time
+- phone number (if available)
+- maps navigation URL
+
+### POST `/route`
+Returns a walking route polyline and ETA for a selected destination.
+
+Payload:
+```json
+{
+  "originLatitude": 12.9716,
+  "originLongitude": 77.5946,
+  "destinationLatitude": 12.9762,
+  "destinationLongitude": 77.6033,
+  "destinationName": "Cubbon Park Police Station"
+}
+```
+
+Nearby Help uses public OpenStreetMap/Overpass/OSRM services and does not require any Google Maps API key.
