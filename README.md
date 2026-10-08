@@ -48,6 +48,7 @@ server.js
 
 ## Setup
 1. Copy [.env.example](./.env.example) to `.env` and set your values.
+   - Set `CLIENT_ORIGIN` to your frontend origin(s). You can provide multiple comma-separated origins, for example `http://localhost:5173,http://127.0.0.1:5173`.
 2. Run migration:
    ```bash
    npm run prisma:migrate -- --name add_incident_module
@@ -95,6 +96,9 @@ Payload:
 Requires either:
 - `Authorization: Bearer <token>`
 - valid session cookie
+
+### GET `/end-users` (ADMIN only)
+List all end users with their linked guardians for admin visibility.
 
 ### POST `/logout`
 Ends the server session.

@@ -22,6 +22,10 @@ if (!process.env.JWT_SECRET || !process.env.SESSION_SECRET) {
 const app = express();
 const PgSession = connectPgSimple(session);
 const isProduction = process.env.NODE_ENV === "production";
+const allowedOrigins = (process.env.CLIENT_ORIGIN || "")
+  .split(",")
+  .map((origin) => origin.trim())
+  .filter(Boolean);
 
 if (isProduction) {
   app.set("trust proxy", 1);
@@ -30,7 +34,17 @@ if (isProduction) {
 app.use(helmet());
 app.use(
   cors({
-    origin: process.env.CLIENT_ORIGIN || true,
+    origin(origin, callback) {
+      if (!origin) {
+        return callback(null, true);
+      }
+
+      if (!allowedOrigins.length || allowedOrigins.includes(origin)) {
+        return callback(null, true);
+      }
+
+      return callback(new Error("Not allowed by CORS"));
+    },
     credentials: true,
   }),
 );

@@ -17,6 +17,12 @@ const loginLimiter = rateLimit({
 router.post("/register", asyncHandler(authController.register));
 router.post("/login", loginLimiter, asyncHandler(authController.login));
 router.get("/me", requireAuth, asyncHandler(authController.me));
+router.get(
+  "/end-users",
+  requireAuth,
+  authorizeRoles("ADMIN"),
+  asyncHandler(authController.listEndUsersWithGuardians),
+);
 router.post("/logout", requireAuth, asyncHandler(authController.logout));
 router.post(
   "/guardian-links",

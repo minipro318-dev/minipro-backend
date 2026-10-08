@@ -36,6 +36,11 @@ const me = async (req, res) => {
   return res.status(200).json({ user });
 };
 
+const listEndUsersWithGuardians = async (req, res) => {
+  const users = await authService.listEndUsersWithGuardians();
+  return res.status(200).json({ users });
+};
+
 const logout = async (req, res, next) => {
   req.session.destroy((error) => {
     if (error) {
@@ -58,6 +63,7 @@ module.exports = {
   register,
   login,
   me,
+  listEndUsersWithGuardians,
   logout,
   linkGuardian,
 };

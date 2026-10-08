@@ -19,6 +19,15 @@ const sanitizeUser = (user) => ({
   lastLogin: user.lastLogin,
 });
 
+const sanitizeGuardian = (user) => ({
+  id: user.id,
+  name: user.name,
+  email: user.email,
+  mobile: user.mobile,
+  status: user.status,
+  lastLogin: user.lastLogin,
+});
+
 const issueToken = (user) =>
   jwt.sign(
     {
@@ -135,6 +144,47 @@ const getCurrentUser = async (userId) => {
   return sanitizeUser(user);
 };
 
+const listEndUsersWithGuardians = async () => {
+  const users = await prisma.user.findMany({
+    where: { role: UserRole.END_USER },
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      mobile: true,
+      status: true,
+      createdAt: true,
+      updatedAt: true,
+      lastLogin: true,
+      guardianLinks: {
+        select: {
+          createdAt: true,
+          guardian: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              mobile: true,
+              status: true,
+              lastLogin: true,
+            },
+          },
+        },
+        orderBy: { createdAt: "desc" },
+      },
+    },
+    orderBy: { createdAt: "desc" },
+  });
+
+  return users.map((user) => ({
+    ...sanitizeUser(user),
+    linkedGuardians: user.guardianLinks.map((link) => ({
+      ...sanitizeGuardian(link.guardian),
+      linkedAt: link.createdAt,
+    })),
+  }));
+};
+
 const linkGuardianToUser = async ({ guardianId, endUserId }) => {
   if (!guardianId || !endUserId) {
     throw new AppError(400, "guardianId and endUserId are required.");
@@ -174,4 +224,4 @@ const linkGuardianToUser = async ({ guardianId, endUserId }) => {
   return link;
 };
 
-module.exports = { register, login, getCurrentUser, linkGuardianToUser };
+module.exports = { register, login, getCurrentUser, listEndUsersWithGuardians, linkGuardianToUser };
