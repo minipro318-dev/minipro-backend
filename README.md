@@ -182,6 +182,27 @@ When resolved, backend stores:
 - `END_USER` (owner) can cancel own active incidents.
 - `ADMIN` can cancel active incidents.
 
+### GET `/analytics` (ADMIN)
+Historical safety analytics with bounded filters for map heatpoints, hotspot rankings, trend charts, and summary metrics.
+
+Supported query params:
+- `startDate`, `endDate` (`YYYY-MM-DD`, UTC)
+- `status` (`ALL` or CSV: `ACTIVE,RESOLVED,CANCELLED`)
+- `category`
+- `timeOfDay` (`ALL|NIGHT|MORNING|AFTERNOON|EVENING`)
+- `granularity` (`hour|day|week|month`)
+- `cellSize` (geographic aggregation, `0.002` to `0.2`)
+- `sliderEndAt` (ISO datetime for time-window playback)
+- `minLat`, `maxLat`, `minLng`, `maxLng` (optional map bounds filter)
+
+### GET `/analytics/export.csv` (ADMIN)
+Download CSV report for the same filtered analytics window, including selected filters and aggregated historical counts.
+
+Privacy/accuracy notes:
+- Response returns aggregated and non-sensitive incident summaries only.
+- Results represent historical recorded incidents and are not predictive risk scores.
+- Incidents without valid coordinates are counted separately and excluded from map density layers.
+
 ## Real-time Events (Socket.IO)
 Authenticated sockets receive role-authorized events:
 - `incident:created`
