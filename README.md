@@ -422,3 +422,63 @@ JOURNEY_MONITOR_INTERVAL_MS=20000
 JOURNEY_ESCALATION_EMAIL_RETRY_COUNT=2
 JOURNEY_ESCALATION_EMAIL_RETRY_BACKOFF_MS=600
 ```
+
+## AI Safety Event API
+
+All endpoints require authentication (`Authorization: Bearer <token>`).
+
+### POST `/api/ai-safety-events/detect` (END_USER)
+Create an AI safety detection event (for example, fall-detection signal) and open a confirmation window.
+
+Example payload:
+```json
+{
+  "eventType": "POSSIBLE_FALL",
+  "modelProvider": "browser",
+  "modelVersion": "heuristic-v1",
+  "classifierType": "MOTION_SPIKE",
+  "classifierScore": 88,
+  "classifierConfidence": 0.86,
+  "confidenceLabel": "HIGH",
+  "latitude": 12.9345,
+  "longitude": 77.6178,
+  "accuracy": 14,
+  "locationAddress": "Near Office Gate"
+}
+```
+
+### GET `/api/ai-safety-events`
+List AI safety events visible to current role (`ADMIN`, linked `GUARDIAN`, owning `END_USER`).
+
+Optional query params:
+- `status` (enum filter)
+- `limit` (max rows)
+
+### GET `/api/ai-safety-events/:id`
+Get one accessible AI safety event.
+
+### POST `/api/ai-safety-events/:id/acknowledge`
+Mark event as acknowledged/safe.
+
+### POST `/api/ai-safety-events/:id/false-alarm`
+Mark event as false alarm.
+
+### POST `/api/ai-safety-events/:id/request-help`
+Escalate immediately to SOS flow and notify linked guardians by email.
+
+### GET `/api/ai-safety-events/admin/stats` (ADMIN)
+Get aggregate admin counters for AI event monitoring.
+
+### AI Safety escalation behavior
+- New detections move to `AWAITING_CONFIRMATION` with a server-side deadline.
+- If user does not acknowledge before timeout, backend monitor escalates to SOS.
+- Escalation emits realtime socket events, links/creates incident records, and sends guardian emails with bounded retries.
+
+### AI Safety env variables
+```env
+AI_SAFETY_CONFIRMATION_TIMEOUT_SECONDS=45
+AI_SAFETY_MONITOR_INTERVAL_MS=10000
+AI_SAFETY_HISTORY_LIMIT=100
+AI_SAFETY_EMAIL_RETRY_COUNT=2
+AI_SAFETY_EMAIL_RETRY_BACKOFF_MS=800
+```

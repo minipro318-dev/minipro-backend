@@ -27,6 +27,8 @@ model User {
   guardianInvitesSent GuardianInvite[] @relation("GuardianInvitesSent")
   guardianInvitesAccepted GuardianInvite[] @relation("GuardianInvitesAccepted")
   endUserJourneyResponses GuardianJourneyResponse[] @relation("EndUserJourneyResponses")
+  aiSafetyEvents      AiSafetyEvent[]   @relation("AiSafetyEvents")
+  escalatedAiSafetyEvents AiSafetyEvent[] @relation("AiSafetyEventEscalatedBy")
 
   @@index([role])
 }
@@ -71,10 +73,49 @@ model Incident {
   locationLogs  IncidentLocation[]
   escalatedJourneys Journey[]
   guardianResponses GuardianJourneyResponse[]
+  aiSafetyEvents AiSafetyEvent[]
 
   @@index([status])
   @@index([reportedById])
   @@index([createdAt])
+}
+
+model AiSafetyEvent {
+  id                  Int                 @id @default(autoincrement())
+  userId               Int
+  eventType            String              @default("POSSIBLE_FALL")
+  status               AiSafetyEventStatus @default(DETECTED)
+  detectedAt           DateTime            @default(now())
+  modelProvider        String
+  modelVersion         String
+  classifierType       String              @default("POSE_HEURISTIC")
+  classifierScore      Float?
+  classifierConfidence Float?
+  confidenceLabel      String?
+  lastKnownLatitude    Float?
+  lastKnownLongitude   Float?
+  lastKnownAccuracy    Float?
+  lastKnownAddress     String?
+  confirmationDeadline DateTime?
+  userResponse         String?
+  responseReason       String?
+  respondedAt          DateTime?
+  notificationError    String?
+  notifiedAt           DateTime?
+  linkedIncidentId     Int?
+  escalationReason     String?
+  escalatedAt          DateTime?
+  escalatedById        Int?
+  createdAt            DateTime            @default(now())
+  updatedAt            DateTime            @updatedAt
+  user                 User                @relation("AiSafetyEvents", fields: [userId], references: [id], onDelete: Cascade)
+  linkedIncident       Incident?           @relation(fields: [linkedIncidentId], references: [id], onDelete: SetNull)
+  escalatedBy          User?               @relation("AiSafetyEventEscalatedBy", fields: [escalatedById], references: [id], onDelete: SetNull)
+
+  @@index([userId, status, detectedAt])
+  @@index([status, confirmationDeadline])
+  @@index([linkedIncidentId])
+  @@index([detectedAt])
 }
 
 model IncidentLocation {
@@ -257,4 +298,14 @@ enum JourneyEventType {
   JOURNEY_COMPLETED
   JOURNEY_CANCELLED
   ESCALATED_TO_SOS
+}
+
+enum AiSafetyEventStatus {
+  DETECTED
+  AWAITING_CONFIRMATION
+  ACKNOWLEDGED
+  FALSE_ALARM
+  ESCALATED
+  EXPIRED
+  CANCELLED
 }

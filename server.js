@@ -8,11 +8,13 @@ const pool = require("./config/db");
 const prisma = require("./lib/prisma");
 const { setupSocket } = require("./lib/socket");
 const { startJourneyMonitor, stopJourneyMonitor } = require("./services/journey-monitor.service");
+const { startAiSafetyMonitor, stopAiSafetyMonitor } = require("./services/ai-safety-monitor.service");
 const authRoutes = require("./routes/auth.routes");
 const incidentRoutes = require("./routes/incident.routes");
 const guardianInviteRoutes = require("./routes/guardian-invite.routes");
 const nearbyHelpRoutes = require("./routes/nearby-help.routes");
 const journeyRoutes = require("./routes/journey.routes");
+const aiSafetyEventRoutes = require("./routes/ai-safety-event.routes");
 const { notFound, errorHandler } = require("./middleware/error");
 
 dotenv.config();
@@ -83,6 +85,7 @@ app.use("/api/incidents", incidentRoutes);
 app.use("/api/guardian-invites", guardianInviteRoutes);
 app.use("/api/nearby-help", nearbyHelpRoutes);
 app.use("/api/journeys", journeyRoutes);
+app.use("/api/ai-safety-events", aiSafetyEventRoutes);
 
 app.use(notFound);
 app.use(errorHandler);
@@ -93,9 +96,11 @@ const server = app.listen(port, () => {
 });
 setupSocket(server);
 startJourneyMonitor();
+startAiSafetyMonitor();
 
 const shutdown = async () => {
   stopJourneyMonitor();
+  stopAiSafetyMonitor();
   server.close(async () => {
     await prisma.$disconnect();
     await pool.end();

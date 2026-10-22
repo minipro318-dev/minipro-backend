@@ -116,4 +116,52 @@ const sendJourneyEscalationEmail = async ({
   });
 };
 
-module.exports = { sendGuardianInviteEmail, sendJourneyEscalationEmail };
+const sendAiSafetyEscalationEmail = async ({
+  toEmail,
+  toName,
+  userName,
+  eventId,
+  detectedAt,
+  lastKnownAddress,
+  lastKnownLatitude,
+  lastKnownLongitude,
+  incidentId,
+}) => {
+  const { config, transporter } = createTransporter();
+  const locationLabel =
+    lastKnownAddress ||
+    (Number.isFinite(lastKnownLatitude) && Number.isFinite(lastKnownLongitude)
+      ? `${lastKnownLatitude}, ${lastKnownLongitude}`
+      : "Location unavailable");
+
+  const subject = `Urgent: AI safety escalation for ${userName}`;
+  const text = [
+    `Hello ${toName},`,
+    "",
+    `An AI-detected safety event (#${eventId}) for ${userName} was not acknowledged in time and has been escalated.`,
+    `Detected at: ${new Date(detectedAt).toLocaleString()}`,
+    `Last known location: ${locationLabel}`,
+    incidentId ? `A linked SOS incident (#${incidentId}) is now active.` : "An SOS incident escalation has been triggered.",
+    "",
+    "Please review the dashboard immediately and contact the user.",
+  ].join("\n");
+
+  const html = `
+    <p>Hello <strong>${toName}</strong>,</p>
+    <p>An AI-detected safety event (#${eventId}) for <strong>${userName}</strong> was not acknowledged in time and has been escalated.</p>
+    <p><strong>Detected at:</strong> ${new Date(detectedAt).toLocaleString()}</p>
+    <p><strong>Last known location:</strong> ${locationLabel}</p>
+    <p>${incidentId ? `A linked SOS incident (#${incidentId}) is now active.` : "An SOS incident escalation has been triggered."}</p>
+    <p>Please review the dashboard immediately and contact the user.</p>
+  `;
+
+  await transporter.sendMail({
+    from: config.from,
+    to: toEmail,
+    subject,
+    text,
+    html,
+  });
+};
+
+module.exports = { sendGuardianInviteEmail, sendJourneyEscalationEmail, sendAiSafetyEscalationEmail };
