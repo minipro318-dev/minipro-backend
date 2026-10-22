@@ -7,10 +7,12 @@ const connectPgSimple = require("connect-pg-simple");
 const pool = require("./config/db");
 const prisma = require("./lib/prisma");
 const { setupSocket } = require("./lib/socket");
+const { startJourneyMonitor, stopJourneyMonitor } = require("./services/journey-monitor.service");
 const authRoutes = require("./routes/auth.routes");
 const incidentRoutes = require("./routes/incident.routes");
 const guardianInviteRoutes = require("./routes/guardian-invite.routes");
 const nearbyHelpRoutes = require("./routes/nearby-help.routes");
+const journeyRoutes = require("./routes/journey.routes");
 const { notFound, errorHandler } = require("./middleware/error");
 
 dotenv.config();
@@ -80,6 +82,7 @@ app.use("/api/auth", authRoutes);
 app.use("/api/incidents", incidentRoutes);
 app.use("/api/guardian-invites", guardianInviteRoutes);
 app.use("/api/nearby-help", nearbyHelpRoutes);
+app.use("/api/journeys", journeyRoutes);
 
 app.use(notFound);
 app.use(errorHandler);
@@ -89,8 +92,10 @@ const server = app.listen(port, () => {
   console.log(`Server running on port ${port}`);
 });
 setupSocket(server);
+startJourneyMonitor();
 
 const shutdown = async () => {
+  stopJourneyMonitor();
   server.close(async () => {
     await prisma.$disconnect();
     await pool.end();

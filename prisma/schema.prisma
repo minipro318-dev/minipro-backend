@@ -22,8 +22,11 @@ model User {
   reportedIncidents Incident[]     @relation("ReportedIncidents")
   resolvedIncidents Incident[]     @relation("ResolvedIncidents")
   locationLogs      IncidentLocation[]
+  plannedJourneys   Journey[]      @relation("PlannedJourneys")
+  guardianJourneyResponses GuardianJourneyResponse[] @relation("GuardianJourneyResponses")
   guardianInvitesSent GuardianInvite[] @relation("GuardianInvitesSent")
   guardianInvitesAccepted GuardianInvite[] @relation("GuardianInvitesAccepted")
+  endUserJourneyResponses GuardianJourneyResponse[] @relation("EndUserJourneyResponses")
 
   @@index([role])
 }
@@ -66,6 +69,8 @@ model Incident {
   reportedBy    User               @relation("ReportedIncidents", fields: [reportedById], references: [id], onDelete: Cascade)
   resolvedBy    User?              @relation("ResolvedIncidents", fields: [resolvedById], references: [id], onDelete: SetNull)
   locationLogs  IncidentLocation[]
+  escalatedJourneys Journey[]
+  guardianResponses GuardianJourneyResponse[]
 
   @@index([status])
   @@index([reportedById])
@@ -88,6 +93,102 @@ model IncidentLocation {
 
   @@index([incidentId, createdAt])
   @@index([createdById])
+}
+
+model Journey {
+  id                   Int                    @id @default(autoincrement())
+  title                String                 @default("Safe Journey")
+  destinationName      String
+  destinationLatitude  Float
+  destinationLongitude Float
+  status               JourneyStatus          @default(PLANNED)
+  plannedById          Int
+  startedAt            DateTime?
+  completedAt          DateTime?
+  cancelledAt          DateTime?
+  endedAt              DateTime?
+  expectedArrivalAt    DateTime?
+  routePolyline        String?
+  routeDistanceMeters  Int?
+  routeDurationSeconds Int?
+  currentLatitude      Float?
+  currentLongitude     Float?
+  currentAccuracy      Float?
+  currentAddress       String?
+  currentLocationAt    DateTime?
+  offRouteCount        Int                    @default(0)
+  checkInReason        String?
+  checkInRequiredAt    DateTime?
+  checkInExpiresAt     DateTime?
+  checkInAcknowledgedAt DateTime?
+  escalatedAt          DateTime?
+  escalationIncidentId Int?
+  lastEscalationNotifiedAt DateTime?
+  lastEscalationNotificationError String?
+  createdAt            DateTime               @default(now())
+  updatedAt            DateTime               @updatedAt
+  plannedBy            User                   @relation("PlannedJourneys", fields: [plannedById], references: [id], onDelete: Cascade)
+  escalationIncident   Incident?              @relation(fields: [escalationIncidentId], references: [id], onDelete: SetNull)
+  locations            JourneyLocation[]
+  events               JourneyEvent[]
+  guardianResponses    GuardianJourneyResponse[]
+
+  @@index([plannedById, status])
+  @@index([status, checkInExpiresAt])
+  @@index([escalationIncidentId])
+  @@index([createdAt])
+}
+
+model GuardianJourneyResponse {
+  id               Int      @id @default(autoincrement())
+  journeyId        Int
+  incidentId       Int?
+  guardianId       Int
+  endUserId        Int
+  message          String
+  messageTemplateKey String?
+  deliveredViaRealtime Boolean @default(false)
+  deliveryError    String?
+  createdAt        DateTime @default(now())
+  journey          Journey   @relation(fields: [journeyId], references: [id], onDelete: Cascade)
+  incident         Incident? @relation(fields: [incidentId], references: [id], onDelete: SetNull)
+  guardian         User      @relation("GuardianJourneyResponses", fields: [guardianId], references: [id], onDelete: Cascade)
+  endUser          User      @relation("EndUserJourneyResponses", fields: [endUserId], references: [id], onDelete: Cascade)
+
+  @@index([journeyId, createdAt])
+  @@index([incidentId])
+  @@index([guardianId])
+  @@index([endUserId, createdAt])
+}
+
+model JourneyLocation {
+  id                Int      @id @default(autoincrement())
+  journeyId         Int
+  latitude          Float
+  longitude         Float
+  accuracy          Float?
+  address           String?
+  locationTimestamp DateTime @default(now())
+  source            String   @default("USER_UPDATE")
+  createdAt         DateTime @default(now())
+  journey           Journey  @relation(fields: [journeyId], references: [id], onDelete: Cascade)
+
+  @@index([journeyId, createdAt])
+}
+
+model JourneyEvent {
+  id         Int              @id @default(autoincrement())
+  journeyId  Int
+  eventType  JourneyEventType
+  message    String
+  actorRole  UserRole?
+  actorId    Int?
+  metadata   Json?
+  createdAt  DateTime         @default(now())
+  journey    Journey          @relation(fields: [journeyId], references: [id], onDelete: Cascade)
+
+  @@index([journeyId, createdAt])
+  @@index([eventType])
 }
 
 model GuardianInvite {
@@ -134,4 +235,26 @@ enum GuardianInviteStatus {
   ACCEPTED
   EXPIRED
   CANCELLED
+}
+
+enum JourneyStatus {
+  PLANNED
+  ACTIVE
+  CHECK_IN_REQUIRED
+  COMPLETED
+  CANCELLED
+  ESCALATED
+}
+
+enum JourneyEventType {
+  JOURNEY_CREATED
+  JOURNEY_STARTED
+  LOCATION_RECORDED
+  DEVIATION_DETECTED
+  CHECK_IN_REQUIRED
+  SAFETY_CONFIRMED
+  GUARDIAN_RESPONSE_SENT
+  JOURNEY_COMPLETED
+  JOURNEY_CANCELLED
+  ESCALATED_TO_SOS
 }

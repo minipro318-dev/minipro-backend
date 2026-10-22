@@ -20,14 +20,21 @@ const getMailerConfig = () => {
   };
 };
 
-const sendGuardianInviteEmail = async ({ toEmail, toName, inviteCode, expiresAt }) => {
+const createTransporter = () => {
   const config = getMailerConfig();
-  const transporter = nodemailer.createTransport({
-    host: config.host,
-    port: config.port,
-    secure: config.secure,
-    auth: config.auth,
-  });
+  return {
+    config,
+    transporter: nodemailer.createTransport({
+      host: config.host,
+      port: config.port,
+      secure: config.secure,
+      auth: config.auth,
+    }),
+  };
+};
+
+const sendGuardianInviteEmail = async ({ toEmail, toName, inviteCode, expiresAt }) => {
+  const { config, transporter } = createTransporter();
 
   const frontendBaseUrl = process.env.FRONTEND_APP_URL || process.env.CLIENT_ORIGIN || "http://localhost:5173";
   const inviteLink = `${frontendBaseUrl.replace(/\/$/, "")}/guardian-accept?code=${encodeURIComponent(inviteCode)}`;
@@ -63,4 +70,50 @@ const sendGuardianInviteEmail = async ({ toEmail, toName, inviteCode, expiresAt 
   });
 };
 
-module.exports = { sendGuardianInviteEmail };
+const sendJourneyEscalationEmail = async ({
+  toEmail,
+  toName,
+  journeyId,
+  userName,
+  destinationName,
+  lastKnownAddress,
+  lastKnownLatitude,
+  lastKnownLongitude,
+  incidentId,
+}) => {
+  const { config, transporter } = createTransporter();
+  const locationLabel =
+    lastKnownAddress ||
+    (Number.isFinite(lastKnownLatitude) && Number.isFinite(lastKnownLongitude)
+      ? `${lastKnownLatitude}, ${lastKnownLongitude}`
+      : "Location unavailable");
+
+  const subject = `Urgent: Journey safety escalation for ${userName}`;
+  const text = [
+    `Hello ${toName},`,
+    "",
+    `${userName}'s safe journey (#${journeyId}) to ${destinationName} did not receive a safety confirmation in time.`,
+    `Last known location: ${locationLabel}`,
+    incidentId ? `An SOS incident (#${incidentId}) has been opened.` : "SOS escalation has been triggered.",
+    "",
+    "Please check the dashboard immediately and contact the user.",
+  ].join("\n");
+
+  const html = `
+    <p>Hello <strong>${toName}</strong>,</p>
+    <p><strong>${userName}</strong>'s safe journey (#${journeyId}) to <strong>${destinationName}</strong> did not receive a safety confirmation in time.</p>
+    <p><strong>Last known location:</strong> ${locationLabel}</p>
+    <p>${incidentId ? `An SOS incident (#${incidentId}) has been opened.` : "SOS escalation has been triggered."}</p>
+    <p>Please check the dashboard immediately and contact the user.</p>
+  `;
+
+  await transporter.sendMail({
+    from: config.from,
+    to: toEmail,
+    subject,
+    text,
+    html,
+  });
+};
+
+module.exports = { sendGuardianInviteEmail, sendJourneyEscalationEmail };

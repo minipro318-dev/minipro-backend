@@ -9,6 +9,7 @@ This backend currently implements two BRD milestones:
 - Automatic reverse-geocoded address fallback
 - Real-time SOS/location/status events over Socket.IO
 - Nearby Help lookup for END_USER (OpenStreetMap/Overpass + OSRM walking routes)
+- Safe Journey Mode with route preview, journey tracking, check-in escalation, and guardian/admin realtime visibility
 - MVC project structure with Prisma ORM
 
 ## Tech Stack
@@ -24,6 +25,7 @@ config/
 controllers/
   auth.controller.js
   incident.controller.js
+  journey.controller.js
 lib/
   prisma.js
 middleware/
@@ -35,9 +37,12 @@ prisma/
 routes/
   auth.routes.js
   incident.routes.js
+  journey.routes.js
 services/
   auth.service.js
   incident.service.js
+  journey.service.js
+  journey-monitor.service.js
 utils/
   app-error.js
   async-handler.js
@@ -182,6 +187,8 @@ Authenticated sockets receive role-authorized events:
 - `incident:created`
 - `incident:location-updated`
 - `incident:status-updated`
+- `journey:created`
+- `journey:updated`
 
 Backend emits only to:
 - reporting user
@@ -280,3 +287,117 @@ Payload:
 ```
 
 Nearby Help uses public OpenStreetMap/Overpass/OSRM services and does not require any Google Maps API key.
+
+## Safe Journey API
+Base path: `/api/journeys`
+
+### GET `/destination-search?query=...&limit=5` (END_USER)
+Returns Nominatim destination suggestions for Rapido-style destination picking.
+
+### GET `/destination-reverse?latitude=...&longitude=...` (END_USER)
+Reverse-geocodes a map-picked destination coordinate to readable address.
+
+### POST `/preview` (END_USER)
+Preview route before starting a journey.
+
+Payload:
+```json
+{
+  "originLatitude": 12.9716,
+  "originLongitude": 77.5946,
+  "destinationLatitude": 12.9762,
+  "destinationLongitude": 77.6033,
+  "destinationName": "Office"
+}
+```
+
+### POST `/` (END_USER)
+Start monitored safe journey.
+
+Payload:
+```json
+{
+  "title": "Safe Journey to Office",
+  "originLatitude": 12.9716,
+  "originLongitude": 77.5946,
+  "destinationLatitude": 12.9762,
+  "destinationLongitude": 77.6033,
+  "destinationName": "Office",
+  "accuracy": 12.4,
+  "locationTimestamp": "2026-10-22T04:30:00.000Z"
+}
+```
+
+### GET `/`
+List journeys by role:
+- `ADMIN`: all journeys
+- `GUARDIAN`: linked users' journeys
+- `END_USER`: own journeys
+
+Optional query:
+- `status=ACTIVE|CHECK_IN_REQUIRED|ESCALATED|COMPLETED|CANCELLED|PLANNED`
+
+### GET `/:id`
+Get one journey detail (route, latest locations, events, escalation incident if present).
+
+### GET `/:id/guardian-responses`
+List guardian responses for a journey. Accessible to authorized participants (`ADMIN`, linked `GUARDIAN`, journey owner `END_USER`).
+
+### POST `/:id/guardian-responses` (GUARDIAN)
+Send a guardian reassurance/coordination response for an active incident-linked journey.
+
+Payload (predefined template key):
+```json
+{
+  "messageTemplateKey": "ON_MY_WAY"
+}
+```
+
+Payload (custom message):
+```json
+{
+  "customMessage": "Please stay near a safe public place. I have alerted nearby contacts."
+}
+```
+
+### POST `/:id/locations`
+Append journey location update (journey owner or admin).
+
+### POST `/:id/confirm-safety`
+Confirm safety after check-in prompt (journey owner or admin).
+
+Optional payload:
+```json
+{
+  "note": "I'm safe, route changed due to roadblock."
+}
+```
+
+### PATCH `/:id/complete`
+Mark journey completed (journey owner or admin).
+
+### PATCH `/:id/cancel`
+Cancel journey (journey owner or admin).
+
+Optional payload:
+```json
+{
+  "reason": "Reached destination by different transport."
+}
+```
+
+### Safe Journey escalation behavior
+- When repeated off-route readings are detected, journey status moves to `CHECK_IN_REQUIRED`.
+- If safety confirmation is not received before deadline, backend monitor escalates to SOS incident.
+- Escalation updates journey status to `ESCALATED`, emits realtime updates, and notifies linked guardians by email when SMTP is configured.
+
+### Safe Journey env variables
+```env
+JOURNEY_DEVIATION_THRESHOLD_METERS=120
+JOURNEY_DEVIATION_REQUIRED_COUNT=3
+JOURNEY_MAX_ACCURACY_FOR_DEVIATION_METERS=100
+JOURNEY_CHECK_IN_TIMEOUT_SECONDS=120
+JOURNEY_MONITOR_INTERVAL_MS=20000
+JOURNEY_ESCALATION_EMAIL_RETRY_COUNT=2
+JOURNEY_ESCALATION_EMAIL_RETRY_BACKOFF_MS=600
+```
